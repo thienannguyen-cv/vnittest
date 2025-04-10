@@ -51,44 +51,6 @@ class ProgressBar(widgets.HTML):
 class Visualizer:
     def __init__(self, model: GradientModel):
         self.model = model
-        
-    def allocate_resource(self):
-        self.allocate_sankey_resource()
-        self.progress_bar.set_progress(25)
-        
-    def allocate_sankey_resource(self):
-        # Build lists for Sankey diagram: sources, targets, and flow values
-        self.sankey_sources, self.sankey_targets, self.sankey_values = [], [], []
-        for layer_pair, flow_matrix in self.model.flow_matrices.items():
-            source_layer, target_layer = layer_pair
-            source_positions = self.model.layer_node_positions[source_layer]
-            target_positions = self.model.layer_node_positions[target_layer]
-            flow_value = 0
-            if flow_matrix is not None:
-                if isinstance(flow_matrix, dict):
-                    indices_in = (flow_matrix["indices_in"])
-                    indices_out = (flow_matrix["indices_out"])
-                    id_in = 0
-                    id_out = 0
-                    for i, (r1, c1) in enumerate(source_positions):
-                        for j, (r2, c2) in enumerate(target_positions):
-                            if flow_value > 0:
-                                while id_in<len(indices_in) and ((indices_in[0])[id_in]) < r1 and ((indices_in[1])[id_in]) < c1:
-                                    id_in += 1
-                                while id_out<len(indices_out) and ((indices_out[0])[id_out]) < r2 and ((indices_out[1])[id_out]) < c2:
-                                    id_out += 1
-                                if (id_in<len(indices_in) and ((indices_in[0])[id_in]) == r1 and ((indices_in[1])[id_in]) == c1) or (id_out<len(indices_out) and ((indices_out[0])[id_out]) == r2 and ((indices_out[1])[id_out]) == c2):
-                                    self.sankey_sources.append(self.model.global_node_indices[(source_layer, (r1, c1))])
-                                    self.sankey_targets.append(self.model.global_node_indices[(target_layer, (r2, c2))])
-                                    self.sankey_values.append(1)
-                else:
-                    for i, (r1, c1) in enumerate(source_positions):
-                        for j, (r2, c2) in enumerate(target_positions):
-                            flow_value = flow_matrix[i, j]
-                            if flow_value > 0:
-                                self.sankey_sources.append(self.model.global_node_indices[(source_layer, (r1, c1))])
-                                self.sankey_targets.append(self.model.global_node_indices[(target_layer, (r2, c2))])
-                                self.sankey_values.append(flow_value)
                         
     def create_progress_bar(self):
         # Tạo một widget HTML
@@ -108,7 +70,7 @@ class Visualizer:
     def destroy_progress_bar(self):
         self.progress_bar.close()
     
-    def create_sankey(self, current_layer, current_node_index, threshold_value, region_settings, sankey_container=None):
+    def create_sankey(self, current_layer, current_node_index, threshold_value, region_settings, sankey_sources, sankey_targets, sankey_values, sankey_container=None):
         new_node_labels, new_node_x, new_node_y, new_node_colors, new_link_colors = [], [], [], [], []
         new_sources, new_targets, new_values = [], [], []
         sankey_fig = None
@@ -156,18 +118,18 @@ class Visualizer:
                         label_counter += 1
                 new_node_colors += updated_node_colors
 
-            for idx, src in enumerate(self.sankey_sources):
-                if src in new_index_mapping and self.sankey_targets[idx] in new_index_mapping:
+            for idx, src in enumerate(sankey_sources):
+                if src in new_index_mapping and sankey_targets[idx] in new_index_mapping:
                     new_sources.append(new_index_mapping[src])
-                    new_targets.append(new_index_mapping[self.sankey_targets[idx]])
-                    new_values.append(self.sankey_values[idx])
-                    if src == self.model.global_node_indices[(current_layer, self.model.layer_node_positions[current_layer][current_node_index])] and float(self.sankey_values[idx]) > threshold_value:
+                    new_targets.append(new_index_mapping[sankey_targets[idx]])
+                    new_values.append(sankey_values[idx])
+                    if src == self.model.global_node_indices[(current_layer, self.model.layer_node_positions[current_layer][current_node_index])] and float(sankey_values[idx]) > threshold_value:
                         new_link_colors.append("red")
                     else:
-                        new_link_colors.append(f"rgba({128*int(float(self.sankey_values[idx])>threshold_value)},"
-                                                 f"{128*int(float(self.sankey_values[idx])>threshold_value)},"
-                                                 f"{128*int(float(self.sankey_values[idx])>threshold_value)},"
-                                                 f"{1.*int(float(self.sankey_values[idx])>threshold_value)+.1})")
+                        new_link_colors.append(f"rgba({128*int(float(sankey_values[idx])>threshold_value)},"
+                                                 f"{128*int(float(sankey_values[idx])>threshold_value)},"
+                                                 f"{128*int(float(sankey_values[idx])>threshold_value)},"
+                                                 f"{1.*int(float(sankey_values[idx])>threshold_value)+.1})")
             sankey_fig = go.FigureWidget(data=[go.Sankey(
                 arrangement='fixed',
                 node=dict(

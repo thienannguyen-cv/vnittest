@@ -15,7 +15,7 @@ setup(
     install_requires=install_requires,
     entry_points={
         'console_scripts': [
-            'vnittest = vnittest.main:main'
+            'vnittest-app = vnittest.web_app:run_app'
         ]
     },
     author='Thien An L. Nguyen',

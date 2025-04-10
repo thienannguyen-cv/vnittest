@@ -16,6 +16,9 @@ class UIController:
         self.visualizer = visualizer
         
     def allocate_resource(self):
+        self.allocate_sankey_resource()
+        self.progress_bar.set_progress(25)
+        
         self.selected_layer = self.model.selectable_layers[0]
         self.connected_layer = self.selected_layer
         for flow_key in self.model.inter_layer_gradient_flows.keys():
@@ -51,6 +54,40 @@ class UIController:
         
         self.build_widgets()
         self.setup_callbacks()
+        
+    def allocate_sankey_resource(self):
+        # Build lists for Sankey diagram: sources, targets, and flow values
+        self.sankey_sources, self.sankey_targets, self.sankey_values = [], [], []
+        for layer_pair, flow_matrix in self.model.flow_matrices.items():
+            source_layer, target_layer = layer_pair
+            source_positions = self.model.layer_node_positions[source_layer]
+            target_positions = self.model.layer_node_positions[target_layer]
+            flow_value = 0
+            if flow_matrix is not None:
+                if isinstance(flow_matrix, dict):
+                    indices_in = (flow_matrix["indices_in"])
+                    indices_out = (flow_matrix["indices_out"])
+                    id_in = 0
+                    id_out = 0
+                    for i, (r1, c1) in enumerate(source_positions):
+                        for j, (r2, c2) in enumerate(target_positions):
+                            if flow_value > 0:
+                                while id_in<len(indices_in) and ((indices_in[0])[id_in]) < r1 and ((indices_in[1])[id_in]) < c1:
+                                    id_in += 1
+                                while id_out<len(indices_out) and ((indices_out[0])[id_out]) < r2 and ((indices_out[1])[id_out]) < c2:
+                                    id_out += 1
+                                if (id_in<len(indices_in) and ((indices_in[0])[id_in]) == r1 and ((indices_in[1])[id_in]) == c1) or (id_out<len(indices_out) and ((indices_out[0])[id_out]) == r2 and ((indices_out[1])[id_out]) == c2):
+                                    self.sankey_sources.append(self.model.global_node_indices[(source_layer, (r1, c1))])
+                                    self.sankey_targets.append(self.model.global_node_indices[(target_layer, (r2, c2))])
+                                    self.sankey_values.append(1)
+                else:
+                    for i, (r1, c1) in enumerate(source_positions):
+                        for j, (r2, c2) in enumerate(target_positions):
+                            flow_value = flow_matrix[i, j]
+                            if flow_value > 0:
+                                self.sankey_sources.append(self.model.global_node_indices[(source_layer, (r1, c1))])
+                                self.sankey_targets.append(self.model.global_node_indices[(target_layer, (r2, c2))])
+                                self.sankey_values.append(flow_value)
 
     def build_widgets(self):
         # Dropdown for layer selection
@@ -106,7 +143,7 @@ class UIController:
         # Toggle for Sankey expand/collapse
         self.sankey_toggle = widgets.ToggleButton(value=False, description='Expand Sankey Diagram', button_style='info', tooltip='Click to expand/collapse the Sankey Diagram')
         # Container for Sankey diagram (initially hidden)
-        self.sankey_widget = self.visualizer.create_sankey(self.layer_dropdown.value, self.node_slider.value, self.threshold_slider.value, self.region_settings)
+        self.sankey_widget = self.visualizer.create_sankey(self.layer_dropdown.value, self.node_slider.value, self.threshold_slider.value, self.region_settings, self.sankey_sources, self.sankey_targets, self.sankey_values)
         self.sankey_container = widgets.VBox([self.sankey_widget])
         self.sankey_container.layout.display = 'none'
         # Output widgets for heatmaps
@@ -255,7 +292,7 @@ class UIController:
         if self.sankey_container.layout.display != 'none':
             self.sankey_toggle.description = 'Expand Sankey Diagram'
             self.sankey_container.layout.display = 'none'
-        new_sankey_widget = self.visualizer.create_sankey(self.selected_layer, self.selected_node_index, self.current_threshold, self.region_settings)
+        new_sankey_widget = self.visualizer.create_sankey(self.selected_layer, self.selected_node_index, self.current_threshold, self.region_settings, self.sankey_sources, self.sankey_targets, self.sankey_values, sankey_container=self.sankey_container)
         self.sankey_widget.data[0].node.label = new_sankey_widget.data[0].node.label
         self.sankey_widget.data[0].node.color = new_sankey_widget.data[0].node.color
         self.sankey_widget.data[0].node.x = new_sankey_widget.data[0].node.x
@@ -315,7 +352,7 @@ class UIController:
             self.sankey_toggle.description = 'Collapse Sankey Diagram'
             self.sankey_container.layout.display = 'flex'
             
-            new_sankey_widget = self.visualizer.create_sankey(self.selected_layer, self.selected_node_index, self.current_threshold, self.region_settings, self.sankey_container)
+            new_sankey_widget = self.visualizer.create_sankey(self.selected_layer, self.selected_node_index, self.current_threshold, self.region_settings, self.sankey_sources, self.sankey_targets, self.sankey_values, sankey_container=self.sankey_container)
             self.sankey_widget.data[0].node.label = new_sankey_widget.data[0].node.label
             self.sankey_widget.data[0].node.color = new_sankey_widget.data[0].node.color
             self.sankey_widget.data[0].node.x = new_sankey_widget.data[0].node.x
@@ -357,7 +394,7 @@ class UIController:
             'input_col': self.input_col_offset_widget.value
         }
         # Update Sankey diagram
-        new_sankey_widget = self.visualizer.create_sankey(self.selected_layer, self.selected_node_index, self.current_threshold, self.region_settings, sankey_container=self.sankey_container)
+        new_sankey_widget = self.visualizer.create_sankey(self.selected_layer, self.selected_node_index, self.current_threshold, self.region_settings, self.sankey_sources, self.sankey_targets, self.sankey_values, sankey_container=self.sankey_container)
         self.sankey_widget.data[0].node.label = new_sankey_widget.data[0].node.label
         self.sankey_widget.data[0].node.color = new_sankey_widget.data[0].node.color
         self.sankey_widget.data[0].node.x = new_sankey_widget.data[0].node.x

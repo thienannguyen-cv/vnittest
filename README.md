@@ -1,6 +1,23 @@
 # vnittest
 Gradient Flow Visualization with Interactive Debugging
 
+## Table of Contents
+- [1. Overview](#1-overview)
+- [2. Main Features](#2-main-features)
+  - [2.1. Gradient Flow Visualization](#21-gradient-flow-visualization)
+  - [2.2. Interactive Debugging](#22-interactive-debugging)
+- [3. Architecture](#3-architecture)
+  - [3.1. Data Processing](#31-data-processing)
+  - [3.2. Visualization](#32-visualization)
+  - [3.3. User Interface (UI)](#33-user-interface-ui)
+  - [3.4. Adapter Mechanism](#34-adapter-mechanism)
+- [4. Usage Workflow with the Adapter](#4-usage-workflow-with-the-adapter)
+- [5. Usage Instructions](#5-usage-instructions)
+  - [Environment Setup](#environment-setup)
+  - [Running the Tool](#running-the-tool)
+- [6. Future Development](#6-future-development)
+- [7. Contribution & Maintenance](#7-contribution--maintenance)
+
 ## 1. Overview
 
 A tool for visually debugging gradient flows between convolutional layers of neural networks. 
@@ -111,18 +128,27 @@ class DebugAdapter:
 
 ### Environment Setup
 
-1. **Install Dependencies:**
+1. **Install from PyPI**
+   
+   You can install **smap** directly from PyPI using pip:
+
    ```bash
-   pip install numpy==1.19.5 plotly==5.12.0 ipywidgets==7.6.5 matplotlib==3.3.4 --force-reinstall
+   pip install vnittest
    ```
+   
 2. **Configure DEBUG_FOLDER:**  
-   Set the `DEBUG_FOLDER` variable (e.g., `"../../../tests/output"`) to point to your data directory.
+   Set the `DEBUG_FOLDER` variable (e.g., `"../tests/test_data/test_"`) to point to your data directory.
 3. **Prepare Data Files:**  
    Ensure that `flow_info.pkl`, `input_representation.npy` and `target_representation.npy` are located in the DEBUG_FOLDER.
 
 ### Running the Tool
 
 1. **Launch the Debug Notebook:**  
+   
+   ```bash
+   vnittest-app
+   ```
+   
    The UI displays:
    - **Sankey Diagram**
    - **Control Widgets:** Layer Dropdown, Node Slider, and Threshold Slider.
