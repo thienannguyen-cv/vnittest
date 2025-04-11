@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 import os, re
 
 def read_version():
-    with open("smap/__init__.py", "r", encoding="utf8") as f:
+    with open("vnittest/__init__.py", "r", encoding="utf8") as f:
         content = f.read()
     version_match = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", content, re.M)
     if version_match:
