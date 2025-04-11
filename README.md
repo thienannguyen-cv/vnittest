@@ -130,7 +130,7 @@ class DebugAdapter:
 
 1. **Install from PyPI**
    
-   You can install **smap** directly from PyPI using pip:
+   You can install **vnittest** directly from PyPI using pip:
 
    ```bash
    pip install vnittest
@@ -139,14 +139,14 @@ class DebugAdapter:
 2. **Configure DEBUG_FOLDER:**  
    Set the `DEBUG_FOLDER` variable (e.g., `"../tests/test_data/test_"`) to point to your data directory.
 3. **Prepare Data Files:**  
-   Ensure that `flow_info.pkl`, `input_representation.npy` and `target_representation.npy` are located in the DEBUG_FOLDER.
+   Ensure that `%DEBUG_FOLDER%flow_info.pkl`, `%DEBUG_FOLDER%input_representation.npy` and `%DEBUG_FOLDER%target_representation.npy` are located in the DEBUG_FOLDER.
 
 ### Running the Tool
 
 1. **Launch the Debug Notebook:**  
    
    ```bash
-   vnittest-app
+   vnittest %DEBUG_FOLDER%
    ```
    
    The UI displays:
