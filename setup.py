@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 import os, re
 
 def read_version():
-    with open("smap/__init__.py", "r", encoding="utf8") as f:
+    with open(os.path.join(os.path.abspath(os.path.dirname(__file__)), "vnittest/__init__.py"), "r", encoding="utf8") as f:
         content = f.read()
     version_match = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", content, re.M)
     if version_match:
@@ -32,6 +32,8 @@ setup(
         ]
     },
     author='Thien An L. Nguyen',
+    author_email="thienannguyen.cv@gmail.com",
+    url="https://github.com/thienannguyen-cv/vnittest",
     description='UI interface for gradient flow visualization',
     long_description=long_description,
     long_description_content_type="text/markdown",  # hoặc "text/x-rst"
@@ -39,6 +41,6 @@ setup(
     # Thêm các tệp dữ liệu nếu cần
     include_package_data=True,
     package_data={
-        'vnittest': ['notebooks/*.ipynb', 'static/*'],
+        'vnittest': ['notebooks/*.ipynb'],
     },
 )

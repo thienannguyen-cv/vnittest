@@ -15,7 +15,7 @@ def open_browser(port=8866):
 def run_app():
     """Khởi chạy ứng dụng web dựa trên Voilà"""
     # Đường dẫn tới notebook
-    notebook_path = pkg_resources.resource_filename('vnittest', 'vnittest.ipynb')
+    notebook_path = pkg_resources.resource_filename('vnittest', 'notebooks/vnittest.ipynb')
     
     # Kiểm tra xem notebook có tồn tại không
     if not os.path.exists(notebook_path):
