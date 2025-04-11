@@ -32,7 +32,7 @@ What are supported?
 - **Interactive UI for visual gradient debugging**:  
   - Use heatmaps for displaying gradient values. 
   - Highlights points that have gradients to a selected node in the convolutional layer (input). 
-  - Support padding correction via the Offset Adjustments feature. 
+  - Support padding correction via the **Offset Adjustments** feature. 
   
 ### 2.2. Interactive Debugging
 - **Input-Editing Mode**:  
@@ -114,7 +114,7 @@ class DebugAdapter:
 ## 4. Usage Workflow with the Adapter
 
 1. **Edit and Save Input:**  
-   Use the debug tool to modify the input heatmap and click **Save** to store the current input representation into the `flow_info.pkl` file.
+   Use the debug tool to modify the input heatmap and click **Save** to store the current input representation into the `%DEBUG_FOLDER%input_representation.npy` file (the destination can be changed with the **Save to:** textbox in the UI). 
 
 2. **External Neural Network Execution:**  
    In a separate notebook or process within the `DEBUG_FOLDER`, run your neural network (with the Adapter attached in a similar way to setting traditional breakpoints as you can see in *vinittest* files, definied below, in the `${{ github.workspace }}/tests` folder) so that it processes the saved input, computes updated gradient flows, and writes the new data to `flow_info.pkl`.
@@ -139,13 +139,14 @@ class DebugAdapter:
 2. **Configure DEBUG_FOLDER:**  
    Set the `DEBUG_FOLDER` variable (e.g., `"../tests/test_data/test_"`) to point to your data directory.
 3. **Prepare Data Files:**  
-   Ensure that `%DEBUG_FOLDER%flow_info.pkl`, `%DEBUG_FOLDER%input_representation.npy` and `%DEBUG_FOLDER%target_representation.npy` are located in the DEBUG_FOLDER.
+   Ensure that `%DEBUG_FOLDER%flow_info.pkl`, `%DEBUG_FOLDER%input_representation.npy` and `%DEBUG_FOLDER%target_representation.npy` are located in the `DEBUG_FOLDER`.
 
 ### Running the Tool
 
 1. **Launch the Debug Notebook:**  
-   
+   Windows:
    ```bash
+   SET DEBUG_FOLDER="../tests/test_data/test_"
    vnittest %DEBUG_FOLDER%
    ```
    
