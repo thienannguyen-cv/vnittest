@@ -11,7 +11,7 @@ Gradient Flow Visualization with Interactive Debugging
   - [3.2. Visualization](#32-visualization)
   - [3.3. User Interface (UI)](#33-user-interface-ui)
   - [3.4. Adapter Mechanism](#34-adapter-mechanism)
-- [4. Usage Workflow with the Adapter](#4-usage-workflow-with-the-adapter)
+- [4. Workflow with Adapter](#4-workflow-with-adapter)
 - [5. Usage Instructions](#5-usage-instructions)
   - [Environment Setup](#environment-setup)
   - [Running the Tool](#running-the-tool)
@@ -80,38 +80,77 @@ What are supported?
 
 ### 3.4. Adapter Mechanism
 - **Standardized Adapter Interface**:  
-  - Users must implement an Adapter to load the saved input from `flow_info.pkl`, process it using their neural network, and store the computed gradient flow back into `flow_info.pkl`.
-  - The Adapter ensures the debugging tool remains independent of specific network architectures.
+  - Users must implement an Adapter to load the saved input, gradient information from `flow_info.pkl`, process it using their neural network, and store the computed gradient flow back into `flow_info.pkl`.
+  - The Adapter ensures that the debugging tool is independent of any particular network architecture.
 
 #### Example Adapter Implementation:
+An example of Adapter from the [SMap](https://github.com/thienannguyen-cv/SMap) project. 
 
 ```python
 import torch
+from torch import nn
+import numpy as np
 
-class DebugAdapter:
-    def __init__(self, model, device="cpu"):
-        self.model = model.to(device)
-        self.device = device
-
-    def compute_gradients(self, input_path, output_path):
-        # Load input from file
-        input_data = torch.load(input_path).to(self.device)
+class TestBot_In(nn.Module):
+    def __init__(self, module=None, offset_in=0, name="in", connet2name="out"):
+        super(TestBot_In, self).__init__()
+        def get_activation_grad(name, connet2name="out"):
+            def hook(module, grad_inputs, grad_outputs):
+                if name is not None:
+                    # Lấy grad_out: shape [N, C_out, H_out, W_out]
+                    grad_out, grad_in = None, None
+                    for grad in grad_inputs:
+                        if grad is not None:
+                            grad_in = grad
+                    H_in, W_in = (grad_in.shape[-2]), (grad_in.shape[-1])
+                    grad_in = (grad_in[:,:,offset_in,:,:]).reshape(H_in, W_in)
+                    
+                    self.testcase.activation_gradients[name] = grad_in.cpu().numpy()
+                    
+                    self.testcase.gradient_flows[(name, connet2name)] = None
+                    import pickle
+                    flow_info = {"activation_gradients": self.testcase.activation_gradients, 
+                                 "gradient_flows": self.testcase.gradient_flows}
+                    np.save(self.testcase.out_path+self.testcase.name+"_input_representation.npy", self.input_representation.reshape(H_in, W_in))
+                    with open(self.testcase.out_path+self.testcase.name+"_flow_info.pkl", 'wb') as f:
+                        pickle.dump(flow_info, f)
+            return hook
+        self.testcase = None
+        self.module = NoneBot()
+        if module is not None:
+            self.module = module
+        self.name = name
+        self.connet2name = connet2name
+        self.input_representation = None
+        self.module.register_backward_hook(get_activation_grad(self.name, self.connet2name))
         
-        # Ensure gradients are tracked
-        input_data.requires_grad = True
-        
-        # Forward pass
-        output = self.model(input_data)
-        
-        # Compute gradients
-        output.backward(torch.ones_like(output))
-        
-        # Extract and save gradients
-        gradients = input_data.grad.cpu().detach().numpy()
-        torch.save(gradients, output_path)
+    def forward(self, x, mask):
+        h, w = mask.shape[-2], mask.shape[-1]
+        self.input_representation = mask.detach().cpu().numpy().reshape(h, w)
+        return self.module(x)
 ```
 
-## 4. Usage Workflow with the Adapter
+*Inside an unit test function.*
+
+```python
+from tools.testing.vtest.vtest_types import *
+
+# Initialize testing environment and a SMap3x3 instance
+# ...
+
+# Construct a test case with built-in testbot Adapters
+testcase = TestCase(name=f"test_{test_type}_target", testbot_in=TestBot_In(), testbot_out=TestBot_Out(), testbot_target=TestBot_Target())
+
+# Cover the input of the SMap3x3 instance with the testbot Adapter for hooking gradient information
+input_repr_x = self.vtestcase.testbot_in(input_repr_x, input_mask)
+
+# Run the neural instance to generate the data of the vnittest tool
+weights = smap3x3(input_repr_x, input_repr_y, input_repr_z, input_mask, target_repr, self.input_mask.shape).reshape(1,-1, self.input_mask.shape[0], self.input_mask.shape[1])
+
+# ...
+```
+
+## 4. Workflow with Adapter
 
 1. **Edit and Save Input:**  
    Use the debug tool to modify the input heatmap and click **Save** to store the current input representation into the `%DEBUG_FOLDER%input_representation.npy` file (the destination can be changed with the **Save to:** textbox in the UI). 
