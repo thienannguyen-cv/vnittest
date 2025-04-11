@@ -38,9 +38,8 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",  # hoặc "text/x-rst"
     license='Apache 2.0',
-    # Thêm các tệp dữ liệu nếu cần
     include_package_data=True,
     package_data={
-        'vnittest': ['notebooks/*.ipynb'],
+        'vnittest': ['notebooks/vnittest.ipynb'],
     },
 )
