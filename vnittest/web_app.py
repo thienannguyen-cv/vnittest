@@ -43,14 +43,13 @@ def run_app():
     if not os.path.exists(debug_path_file):
         print(f"Error: Cannot access debug path")
     
-    # Khởi động trình duyệt web trong một luồng riêng biệt
-    threading.Thread(target=open_browser, args=(port,)).start()
-    
-    # Khởi động Voilà server
-    print(f"Starting web app on http://localhost:{port}...")
-    subprocess.run([
+    # Dùng Popen để không chặn kernel
+    subprocess.Popen([
         "voila", 
         notebook_path,
         "--port", str(port),
-        "--theme=light"
+        "--theme=light",
+        "--no-browser"
     ])
+
+    open_browser(port)

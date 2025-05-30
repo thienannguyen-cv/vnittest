@@ -1,2 +1,4 @@
 /vnittest.egg-info
 /build
+/vnittest/notebooks/.ipynb_checkpoints
+/vnittest/__pycache__
