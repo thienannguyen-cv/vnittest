@@ -13,3 +13,4 @@ dependencies:
   - matplotlib
   - plotly
   - scikit-learn
+  - anywidget
