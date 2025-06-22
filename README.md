@@ -210,6 +210,10 @@ weights = smap3x3(input_repr_x, input_repr_y, input_repr_z, input_mask, target_r
 6. **Interact and Inspect:**  
    Use the control widgets to select different layers, nodes, and thresholds. The visualizations update automatically.
 
+7. **Launch with MyBinder:**
+
+   [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/thienannguyen-cv/vnittest/HEAD?urlpath=voila%2Frender%2Fvnittest%2Fnotebooks%2Fmybinder_vnittest.ipynb)
+
 ---
 
 ## 6. Future Development
