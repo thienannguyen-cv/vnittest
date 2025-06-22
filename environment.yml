@@ -1,0 +1,15 @@
+name: voila-env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - jupyterlab>=3.0,<4.0  # Yêu cầu JupyterLab phiên bản 3
+  - voila
+  - ipywidgets>=7.6,<8.0  # Yêu cầu ipywidgets phiên bản 7
+  - widgetsnbextension
+  - ipyevents
+  - numpy
+  - pandas
+  - matplotlib
+  - plotly
+  - scikit-learn
