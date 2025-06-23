@@ -180,7 +180,8 @@ weights = smap3x3(input_repr_x, input_repr_y, input_repr_z, input_mask, target_r
 3. **Prepare Data Files:**  
    Ensure that `%DEBUG_FOLDER%flow_info.pkl`, `%DEBUG_FOLDER%input_representation.npy` and `%DEBUG_FOLDER%target_representation.npy` are located in the `DEBUG_FOLDER`.
 
-### Running the Tool
+### Running the Tool 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/thienannguyen-cv/vnittest/HEAD?urlpath=voila%2Frender%2Fvnittest%2Fnotebooks%2Fmybinder_vnittest.ipynb)
 
 1. **Launch the Debug Notebook:**  
    Windows:
@@ -209,10 +210,6 @@ weights = smap3x3(input_repr_x, input_repr_y, input_repr_z, input_mask, target_r
 
 6. **Interact and Inspect:**  
    Use the control widgets to select different layers, nodes, and thresholds. The visualizations update automatically.
-
-7. **Launch with MyBinder:**
-
-   [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/thienannguyen-cv/vnittest/HEAD?urlpath=voila%2Frender%2Fvnittest%2Fnotebooks%2Fmybinder_vnittest.ipynb)
 
 ---
 
