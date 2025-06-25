@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Kích hoạt môi trường conda đã được tạo
+source ${CONDA_DIR}/bin/activate voila-env
+
+# Cài đặt gói cục bộ ở chế độ editable
+# Dấu "." đại diện cho thư mục gốc, nơi có file setup.py của vnittest
+pip install -e .
+
+# Xây dựng lại JupyterLab để liên kết tất cả các phần mở rộng
+jupyter lab build
