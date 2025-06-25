@@ -2,8 +2,10 @@
 # View: Visualization creation (Sankey and Heatmaps)
 # ======================================================
 from vnittest import GradientModel
+import numpy as np
 import ipywidgets as widgets
 import plotly.graph_objs as go
+from IPython.display import display
 
 class ProgressBar(widgets.HTML):
     def __init__(self):
@@ -123,7 +125,7 @@ class Visualizer:
                     new_sources.append(new_index_mapping[src])
                     new_targets.append(new_index_mapping[sankey_targets[idx]])
                     new_values.append(sankey_values[idx])
-                    if src == self.model.global_node_indices[(current_layer, self.model.layer_node_positions[current_layer][current_node_index])] and float(sankey_values[idx]) > threshold_value:
+                    if src == self.model.global_node_indices[(current_layer, self.model.layer_node_positions[current_layer][current_node_index])] and float(sankey_values[idx]) >= threshold_value:
                         new_link_colors.append("red")
                     else:
                         new_link_colors.append(f"rgba({128*int(float(sankey_values[idx])>threshold_value)},"
@@ -150,41 +152,107 @@ class Visualizer:
             )])
             sankey_fig.update_layout(title_text='Gradient Flow', font_size=10)
         return sankey_fig
-
-    def _create_heatmap_conv1(self, current_node_index, current_layer, region_settings, select_xmin_widget, select_xmax_widget, select_ymin_widget, select_ymax_widget):
+    
+    def _calc_w(self, z, ids, current_zoom):
+        from vnittest import utils
+        
+        id_z, row, col = 0, 0, 0
+        if ids is not None:
+            id_z, row, col = (ids[0]), (ids[1]), (ids[2])
+        ch_id = (int(current_zoom*10)%10)
+        w = (z[4:5,:,:,:])
+        
+        if z.shape[0] == 3*3:
+            if ch_id!=9:
+                w = utils.shift_tensor(z, ch_id)
+            else:
+                for i in range(3*3):
+                    dx, dy = utils.INDEX2OFFSETS[i]
+                    new_row, new_col = (row+dy), (col+dx)
+                    if (new_row>0) and (new_row<(z.shape[-2])) and (new_col>0) and (new_col<(z.shape[-1])):
+                        w[0,id_z,new_row,new_col] = (z[i,id_z,row,col])
+            
+        w = (w[0,id_z,:,:])
+        return w
+        
+    def _create_heatmap_focused_conv(self, current_node_index, focused_layer, current_zoom, z, mask_ids, region_setting, xmin_widget, xmax_widget, ymin_widget, ymax_widget, is_conv1_choosed=True):
+        from vnittest import utils
+        
+        ch_id = 0
         highlight_shapes = []
-        grid_shape = self.model.layer_activation_gradients[current_layer].shape
+        grid_shape = self.model.layer_activation_gradients[focused_layer].shape
+        xmin, xmax, ymin, ymax = (region_setting[0]), (region_setting[1]), (region_setting[2]), (region_setting[3])
+        w = None
         if current_node_index is not None:
-            row, col = divmod(current_node_index, grid_shape[-1])
+            ids = utils.calculate_conv_ids(mask_ids, current_node_index, grid_shape)
+            id_z, row, col = (ids[0]), (ids[1]), (ids[2])
+            
+            w = 0.+z[4,id_z,:,:]
+            ch_id = (int(current_zoom*10)%10)
+            
+            
+            if ch_id != (3*3):
+                w = 0.+z[ch_id,id_z,:,:]
+                if utils.DEBUG_FLAG:
+                    self.model.in_ch_id = ch_id
+                    self.model.in_z_id = id_z
+                    self.model.in_row = row
+                    self.model.in_col = col
+                    self.model.in_val = w[row, col]
+            else:
+                for i in range(3*3):
+                    offsets = (utils.INDEX2OFFSETS[i])
+                    w[row+(offsets[-2]), col+(offsets[-1])] = z[i,id_z,row, col]
+                    highlight_shapes.append(dict(
+                        type='circle', xref='x', yref='y',
+                        x0=col + (offsets[-2]) - 0.5, y0=(z.shape[-2]) - 1 - row - (offsets[-1])  - 0.5,
+                        x1=col + (offsets[-2])  + 0.5, y1=(z.shape[-2]) - 1 - row - (offsets[-1])  + 0.5,
+                        line=dict(color='blue', width=3)
+                    ))
             highlight_shapes.append(dict(
                 type='circle', xref='x', yref='y',
-                x0=col - 0.5, y0=grid_shape[0] - 1 - row - 0.5,
-                x1=col + 0.5, y1=grid_shape[0] - 1 - row + 0.5,
+                x0=col - 0.5, y0=(z.shape[-2]) - 1 - row - 0.5,
+                x1=col + 0.5, y1=(z.shape[-2]) - 1 - row + 0.5,
                 line=dict(color='red', width=3)
             ))
+        colorbar=dict(title='', len=0.5, x=1.02, xanchor='left', thickness=10)
         heatmap_fig = go.FigureWidget(data=go.Heatmap(
-            z=(self.model.layer_activation_gradients[current_layer])[::-1, :],
+            z=(w[::-1, :]),
             colorscale='Viridis',
-            zmin=(self.model.layer_activation_gradients[current_layer]).min(),
-            zmax=(self.model.layer_activation_gradients[current_layer]).max(),
-            colorbar=dict(title='', len=0.5, x=1.02, xanchor='left', thickness=10)
+            zmin=(w[::-1, :]).min(),
+            zmax=(w[::-1, :]).max(),
+            colorbar=colorbar, showscale=utils.is_show_color_bar
         ))
         try:
-            xmin, xmax = ((region_settings[current_layer])[0]) - 0.5, ((region_settings[current_layer])[1]) + 0.5
-            ymin, ymax = ((region_settings[current_layer])[2]) - 0.5, ((region_settings[current_layer])[3]) + 0.5
             heatmap_fig.update_layout(
-                xaxis=dict(range=[xmin, xmax]),
-                yaxis=dict(range=[ymin, ymax])
+                xaxis=dict(range=[xmin - 0.5, xmax + 0.5]),
+                yaxis=dict(range=[ymin - 0.5, ymax + 0.5])
             )
         except Exception as e:
             pass
 
         def on_x_range_change(layout, x_range):
-            select_xmin_widget.value = int(x_range[0])
-            select_xmax_widget.value = int(x_range[1])
-        def on_y_range_change(change, y_range):
-            select_ymin_widget.value = int(y_range[0])
-            select_ymax_widget.value = int(y_range[1])
+            h, w = ((mask_ids[-1]).shape[-2]), ((mask_ids[-1]).shape[-1])
+            offsets = np.where(np.ones_like(mask_ids[-1])==1)
+            mask = (((offsets[-1])>=((x_range[-2])-.5)) & ((offsets[-1])<=((x_range[-1])+.5))).reshape(-1,h,w)
+            
+            xmin, xmax = ((mask_ids[-1])[mask]).min(), ((mask_ids[-1])[mask]).max()
+            xmin_widget.value = int(xmin)
+            xmax_widget.value = int(xmax)
+            
+        def on_y_range_change(layout, y_range):
+            h, w = ((mask_ids[-2]).shape[-2]), ((mask_ids[-2]).shape[-1])
+            offsets = np.where(np.ones_like(mask_ids[-2])==1)
+            mask = (((offsets[-2])>=((y_range[-2])-.5)) & ((offsets[-2])<=((y_range[-1])+.5))).reshape(-1,h,w)
+            if (y_range[-2]) >= (y_range[-1]):
+                print((y_range[-2], y_range[-1]))
+                print(offsets[-2])
+                print(offsets[-1])
+                print(mask_ids[-2])
+                print((mask_ids[-2])[mask])
+            ymin, ymax = ((mask_ids[-2])[mask]).min(), ((mask_ids[-2])[mask]).max()
+            ymin_widget.value = int(ymin)
+            ymax_widget.value = int(ymax)
         heatmap_fig.layout.on_change(on_x_range_change, 'xaxis.range')
         heatmap_fig.layout.on_change(on_y_range_change, 'yaxis.range')
 
@@ -202,48 +270,133 @@ class Visualizer:
                 font=dict(size=10)
             )]
         )
+        if np.abs(xmax_widget.value-xmin_widget.value)>15:
+            heatmap_fig.update_xaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(xmax_widget.value-xmin_widget.value))
+            )
+        if np.abs(ymax_widget.value-ymin_widget.value)>15:
+            heatmap_fig.update_yaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(ymax_widget.value-ymin_widget.value))
+            )
         return heatmap_fig
 
-    def _create_heatmap_conv2(self, current_node_index, current_layer, connected_layer, threshold_value, region_settings, output_xmin_widget, output_xmax_widget, output_ymin_widget, output_ymax_widget):
+    def _create_heatmap_relative_conv(self, current_node_index, focused_layer, relative_layer, threshold_value, current_zoom, z, mask_ids, region_setting, xmin_widget, xmax_widget, ymin_widget, ymax_widget, is_conv1_choosed=True):
+        from vnittest import utils
+        
+        ch_id = 0
         highlight_shapes = []
-
-        grid_shape = self.model.layer_activation_gradients[connected_layer].shape
-        if not isinstance(self.model.flow_matrices[(current_layer, connected_layer)], dict):
-            flow_matrix_thresholded = None
-            if self.model.flow_matrices[(current_layer, connected_layer)] is not None:
-                flow_matrix_thresholded = ((self.model.flow_matrices[(current_layer, connected_layer)] > threshold_value)[current_node_index, :]).reshape(*grid_shape)
-            for r in range(grid_shape[0]):
-                for c in range(grid_shape[1]):
-                    if (flow_matrix_thresholded is not None) and flow_matrix_thresholded[r, c] > 0:
-                        highlight_shapes.append(dict(
-                            type='circle', xref='x', yref='y',
-                            x0=c - 0.5, y0=grid_shape[0] - 1 - r - 0.5,
-                            x1=c + 0.5, y1=grid_shape[0] - 1 - r + 0.5,
-                            line=dict(color='red', width=3)
-                        ))
+        grid_shape = None
+        xmin, xmax, ymin, ymax = (region_setting[0]), (region_setting[1]), (region_setting[2]), (region_setting[3])
+        ids, w = None, None
+        current_layer, connected_layer = focused_layer, relative_layer
+        if not is_conv1_choosed:
+            current_layer, connected_layer = relative_layer, focused_layer
+        if (self.model.flow_matrices[(current_layer, connected_layer)]) is not None:
+            if not isinstance(self.model.flow_matrices[(current_layer, connected_layer)], dict):
+                flow_matrix_thresholded = None
+                if is_conv1_choosed:
+                    grid_shape = self.model.layer_activation_gradients[connected_layer].shape
+                    flow_matrix_thresholded = (((self.model.flow_matrices[(current_layer, connected_layer)]) > threshold_value)[current_node_index, :]).reshape(*grid_shape)
+                else:
+                    grid_shape = self.model.layer_activation_gradients[current_layer].shape
+                    flow_matrix_thresholded = (((self.model.flow_matrices[(current_layer, connected_layer)]) > threshold_value)[:, current_node_index]).reshape(*grid_shape)
+                for r in range(grid_shape[0]):
+                    for c in range(grid_shape[1]):
+                        if (flow_matrix_thresholded[r, c]) > 0:
+                            highlight_shapes.append(dict(
+                                type='circle', xref='x', yref='y',
+                                x0=c - 0.5, y0=grid_shape[0] - 1 - r - 0.5,
+                                x1=c + 0.5, y1=grid_shape[0] - 1 - r + 0.5,
+                                line=dict(color='red', width=3)
+                            ))
+            else:
+                flow_matrix = (self.model.flow_matrices[(current_layer, connected_layer)])
+                grid_shape = self.model.layer_activation_gradients[relative_layer].shape
+                if current_node_index is not None:
+                    ids = utils.calculate_conv_ids(mask_ids, current_node_index, grid_shape)
+                    id_z, row, col = (ids[0]), (ids[1]), (ids[2])
+                    original_row, original_col = ((mask_ids[0])[id_z, row, col]), ((mask_ids[1])[id_z, row, col])
+                    ch_id = (int(current_zoom*10)%10)
+                    ch_ids = [ch_id]
+                    w = 0.+z[4,id_z,:,:]
+                    if ch_id==(3*3):
+                        ch_ids = list(range(3*3))
+                        ch_ids.append(4)
+                    else:
+                        w = 0.+z[ch_id,id_z,:,:]
+                    
+                    for j in ch_ids:
+                        offsets = (utils.INDEX2OFFSETS[j])
+                        new_row, new_col = (row+(offsets[-2])), (col+(offsets[-1]))
+                        w[new_row, new_col] = z[j,id_z,new_row, new_col]
+                        if utils.DEBUG_FLAG and (ch_id!=(3*3)):
+                            self.model.out_ch_id = ch_id
+                            self.model.out_id_z = id_z
+                            self.model.out_row = new_row
+                            self.model.out_col = new_col
+                            self.model.out_val = w[new_row, new_col]
+                        if (new_row>=0) and (new_row<((mask_ids[0]).shape[-2])) and (new_col>=0) and (new_col<((mask_ids[0]).shape[-1])):
+                            color = ("blue" if j!=(ch_ids[-1]) else "red")
+                            new_original_row, new_original_col = ((mask_ids[0])[id_z, new_row, new_col]), ((mask_ids[1])[id_z, new_row, new_col])
+                            flow_value = 0
+                            if is_conv1_choosed:
+                                if ((original_row, original_col), (new_original_row, new_original_col)) in flow_matrix:
+                                    flow_value = (flow_matrix[((original_row, original_col), (new_original_row, new_original_col))])
+                            else:
+                                if ((new_original_row, new_original_col), (original_row, original_col)) in flow_matrix:
+                                    flow_value = (flow_matrix[((new_original_row, new_original_col), (original_row, original_col))])
+                            if flow_value >= threshold_value:
+                                highlight_shapes.append(dict(
+                                    type='circle', xref='x', yref='y',
+                                    x0=new_col - 0.5, y0=(z.shape[-2]) - 1 - new_row - 0.5,
+                                    x1=new_col + 0.5, y1=(z.shape[-2]) - 1 - new_row + 0.5,
+                                    line=dict(color=color, width=3)
+                                ))
+        colorbar=dict(title='', len=0.5, x=1.02, xanchor='left', thickness=10)
         heatmap_fig = go.FigureWidget(data=go.Heatmap(
-            z=(self.model.layer_activation_gradients[connected_layer])[::-1, :],
+            z=(w[::-1, :]),
             colorscale='Viridis',
-            zmin=(self.model.layer_activation_gradients[connected_layer]).min(),
-            zmax=(self.model.layer_activation_gradients[connected_layer]).max(),
-            colorbar=dict(title='', len=0.5, x=1.02, xanchor='left', thickness=10)
+            zmin=(w[::-1, :]).min(),
+            zmax=(w[::-1, :]).max(),
+            colorbar=colorbar, showscale=utils.is_show_color_bar
         ))
         try:
-            xmin, xmax = ((region_settings[connected_layer])[0]) - 0.5, ((region_settings[connected_layer])[1]) + 0.5
-            ymin, ymax = ((region_settings[connected_layer])[2]) - 0.5, ((region_settings[connected_layer])[3]) + 0.5
             heatmap_fig.update_layout(
-                xaxis=dict(range=[xmin, xmax]),
-                yaxis=dict(range=[ymin, ymax])
+                xaxis=dict(range=[xmin - 0.5, xmax + 0.5]),
+                yaxis=dict(range=[ymin - 0.5, ymax + 0.5])
             )
         except Exception as e:
             pass
 
         def on_x_range_change(layout, x_range):
-            output_xmin_widget.value = int(x_range[0])
-            output_xmax_widget.value = int(x_range[1])
-        def on_y_range_change(change, y_range):
-            output_ymin_widget.value = int(y_range[0])
-            output_ymax_widget.value = int(y_range[1])
+            h, w = ((mask_ids[-1]).shape[-2]), ((mask_ids[-1]).shape[-1])
+            offsets = np.where(np.ones_like(mask_ids[-1])==1)
+            mask = (((offsets[-1])>=((x_range[-2])-.5)) & ((offsets[-1])<=((x_range[-1])+.5))).reshape(-1,h,w)
+            
+            xmin, xmax = ((mask_ids[-1])[mask]).min(), ((mask_ids[-1])[mask]).max()
+            xmin_widget.value = int(xmin)
+            xmax_widget.value = int(xmax)
+            
+        def on_y_range_change(layout, y_range):
+            h, w = ((mask_ids[-2]).shape[-2]), ((mask_ids[-2]).shape[-1])
+            offsets = np.where(np.ones_like(mask_ids[-2])==1)
+            mask = (((offsets[-2])>=((y_range[-2])-.5)) & ((offsets[-2])<=((y_range[-1])+.5))).reshape(-1,h,w)
+            
+            ymin, ymax = ((mask_ids[-2])[mask]).min(), ((mask_ids[-2])[mask]).max()
+            ymin_widget.value = int(ymin)
+            ymax_widget.value = int(ymax)
         heatmap_fig.layout.on_change(on_x_range_change, 'xaxis.range')
         heatmap_fig.layout.on_change(on_y_range_change, 'yaxis.range')
 
@@ -261,45 +414,97 @@ class Visualizer:
                 font=dict(size=10)
             )]
         )
+        if np.abs(xmax_widget.value-xmin_widget.value)>15:
+            heatmap_fig.update_xaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(xmax_widget.value-xmin_widget.value))
+            )
+        if np.abs(ymax_widget.value-ymin_widget.value)>15:
+            heatmap_fig.update_yaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(ymax_widget.value-ymin_widget.value))
+            )
         return heatmap_fig
 
-    def _create_heatmap_target(self, current_node_index, current_layer, region_settings, offset_params):
-        row_offset = -offset_params['target_row']
-        col_offset = offset_params['target_col']
-        shapes = []
-        grid_shape = self.model.target_representation.shape
-        if current_node_index is not None:
-            row, col = divmod(current_node_index, self.model.layer_activation_gradients[current_layer].shape[-1])
-            shapes.append(dict(
-                type='circle', xref='x', yref='y',
-                x0=col - col_offset - 0.5, y0=grid_shape[0]-1 - row - row_offset - 0.5,
-                x1=col - col_offset + 0.5, y1=grid_shape[0]-1 - row - row_offset + 0.5,
-                line=dict(color='red', width=3)
-            ))
-        heatmap_fig = go.FigureWidget(data=go.Heatmap(
-            z=self.model.target_representation[::-1, :],
-            colorscale='Viridis',
-            zmin=self.model.target_representation.min(),
-            zmax=self.model.target_representation.max(),
-            colorbar=dict(title='', len=0.5, x=1.02, xanchor='left', thickness=10)
-        ))
+    def _create_heatmap_target(self, current_node_index, current_layer, current_zoom, z, mask_ids, region_setting):
+        from vnittest import utils
         
+        ch_id = 0
+        highlight_shapes = []
+        grid_shape = self.model.target_representation.shape
+        xmin, xmax, ymin, ymax = (region_setting[0]), (region_setting[1]), (region_setting[2]), (region_setting[3])
+        w = None
+        if current_node_index is not None:
+            ids = utils.calculate_conv_ids(mask_ids, current_node_index, grid_shape)
+            id_z, row, col = (ids[0]), (ids[1]), (ids[2])
+            original_row, original_col = ((mask_ids[0])[id_z, row, col]), ((mask_ids[1])[id_z, row, col])
+            ch_id = (int(current_zoom*10)%10)
+            w = np.max(z[0,:,:,:],axis=0,keepdims=False)
+            if ch_id != (3*3):
+                offsets = (utils.INDEX2OFFSETS[ch_id])
+                new_row, new_col = (row+(offsets[-2])), (col+(offsets[-1]))
+                if utils.DEBUG_FLAG:
+                    self.model.target_ch_id = 0
+                    self.model.target_id_z = id_z
+                    self.model.target_row = new_row
+                    self.model.target_col = new_col
+                    self.model.target_val = w[new_row, new_col]
+                if (new_row>=0) and (new_row<((mask_ids[0]).shape[-2])) and (new_col>=0) and (new_col<((mask_ids[0]).shape[-1])):
+                    new_original_row, new_original_col = ((mask_ids[0])[id_z, new_row, new_col]), ((mask_ids[1])[id_z, new_row, new_col])
+                    highlight_shapes.append(dict(
+                        type='circle', xref='x', yref='y',
+                        x0=new_col - 0.5, y0=(z.shape[-2]) - 1 - new_row - 0.5,
+                        x1=new_col + 0.5, y1=(z.shape[-2]) - 1 - new_row + 0.5,
+                        line=dict(color='red', width=3)
+                    ))
+            else:
+                for i in range(3*3):
+                    offsets = (utils.INDEX2OFFSETS[i])
+                    new_row, new_col = (row+(offsets[-2])), (col+(offsets[-1]))
+                    color = "blue"
+                    if i==4:
+                        color = "red"
+                    if (new_row>=0) and (new_row<((mask_ids[0]).shape[-2])) and (new_col>=0) and (new_col<((mask_ids[0]).shape[-1])):
+                        new_original_row, new_original_col = ((mask_ids[0])[id_z, new_row, new_col]), ((mask_ids[1])[id_z, new_row, new_col])
+                        highlight_shapes.append(dict(
+                            type='circle', xref='x', yref='y',
+                            x0=new_col - 0.5, y0=(z.shape[-2]) - 1 - new_row - 0.5,
+                            x1=new_col + 0.5, y1=(z.shape[-2]) - 1 - new_row + 0.5,
+                            line=dict(color=color, width=3)
+                        ))
+                    
+        colorbar=dict(title='', len=0.5, x=1.02, xanchor='left', thickness=10)
+        heatmap_fig = go.FigureWidget(data=go.Heatmap(
+            z=(w[::-1, :]),
+            colorscale='Viridis',
+            zmin=(w[::-1, :]).min(),
+            zmax=(w[::-1, :]).max(),
+            colorbar=colorbar, showscale=utils.is_show_color_bar
+        ))
         try:
-            xmin, xmax = ((region_settings[current_layer])[0]) - col_offset - 0.5, ((region_settings[current_layer])[1]) - col_offset + 0.5
-            ymin, ymax = ((grid_shape[0] - self.model.layer_activation_gradients[current_layer].shape[0]) + ((region_settings[current_layer])[2]) - row_offset - 0.5), ((grid_shape[0] - self.model.layer_activation_gradients[current_layer].shape[0]) + ((region_settings[current_layer])[3]) - row_offset + 0.5)
             heatmap_fig.update_layout(
-                xaxis=dict(range=[xmin, xmax]),
-                yaxis=dict(range=[ymin, ymax])
+                xaxis=dict(range=[xmin - 0.5, xmax + 0.5]),
+                yaxis=dict(range=[ymin - 0.5, ymax + 0.5])
             )
         except Exception as e:
             pass
-        
+
         heatmap_fig.update_layout(
             margin=dict(l=10, r=10, t=10, b=40),
             width=300, height=300,
             xaxis=dict(dtick=1),
             yaxis=dict(dtick=1),
-            shapes=shapes,
+            shapes=highlight_shapes,
             annotations=[dict(
                 text="Target Representation",
                 x=0.5, y=-0.15,
@@ -308,31 +513,162 @@ class Visualizer:
                 font=dict(size=10)
             )]
         )
+        if np.abs(xmax-xmin)>15:
+            heatmap_fig.update_xaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(xmax-xmin))
+            )
+        if np.abs(ymax-ymin)>15:
+            heatmap_fig.update_yaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(ymax-ymin))
+            )
         return heatmap_fig
 
-    def _create_heatmap_input(self, current_node_index, current_layer, region_settings, offset_params):
-        input_row_offset = -offset_params['input_row']
-        input_col_offset = offset_params['input_col']
-        shapes = []
-        grid_shape = self.model.editable_input_representation.shape
+    def _create_heatmap_input(self, current_node_index, current_layer, current_zoom, z, mask_ids, region_setting):
+        from vnittest import utils
+        
+        ch_id = 0
+        highlight_shapes = []
+        grid_shape = self.model.input_representation.shape
+        xmin, xmax, ymin, ymax = (region_setting[0]), (region_setting[1]), (region_setting[2]), (region_setting[3])
+        w = None
         if current_node_index is not None:
-            row, col = divmod(current_node_index, self.model.layer_activation_gradients[current_layer].shape[-1])
-            shapes.append(dict(
-                type='circle', xref='x', yref='y',
-                x0=col - input_col_offset - 0.5, y0=grid_shape[0]-1 - row - input_row_offset - 0.5,
-                x1=col - input_col_offset + 0.5, y1=grid_shape[0]-1 - row - input_row_offset + 0.5,
-                line=dict(color='red', width=3)
-            ))
+            ch_id = (int(current_zoom*10)%10)
+            ids = utils.calculate_conv_ids(mask_ids, current_node_index, grid_shape)
+            id_z, row, col = (ids[0]), (ids[1]), (ids[2])
+            w = 0.+(z[4,id_z,:,:])
+            if ch_id != (3*3):
+                offsets = (utils.INDEX2OFFSETS[ch_id])
+                new_row, new_col = (row + (offsets[-2])), (col + (offsets[-1]))
+                w = 0.+(z[ch_id,id_z,:,:])
+                if utils.DEBUG_FLAG:
+                    self.model.input_ch_id = ch_id
+                    self.model.input_id_z = id_z
+                    self.model.input_row = new_row
+                    self.model.input_col = new_col
+                    self.model.input_val = w[new_row, new_col]
+                highlight_shapes.append(dict(
+                    type='circle', xref='x', yref='y',
+                    x0=new_col - 0.5, y0=(z.shape[-2]) - 1 - new_row - 0.5,
+                    x1=new_col + 0.5, y1=(z.shape[-2]) - 1 - new_row + 0.5,
+                    line=dict(color='red', width=3)
+                ))
+            else:
+                for i in range(3*3):
+                    color = "blue"
+                    if i==4:
+                        color = "red"
+                    offsets = (utils.INDEX2OFFSETS[i])
+                    new_row, new_col = (row+(offsets[-2])), (col+(offsets[-1]))
+                    w[new_row, new_col] = z[i,id_z,new_row, new_col]
+
+                    highlight_shapes.append(dict(
+                        type='circle', xref='x', yref='y',
+                        x0=col + (offsets[-1]) - 0.5, y0=(z.shape[-2]) - 1 - row - (offsets[-2]) - 0.5,
+                        x1=col + (offsets[-1]) + 0.5, y1=(z.shape[-2]) - 1 - row - (offsets[-2]) + 0.5,
+                        line=dict(color=color, width=3)
+                    ))
+            
+        colorbar=dict(title='', len=0.5, x=1.02, xanchor='left', thickness=10)
         heatmap_fig = go.FigureWidget(data=go.Heatmap(
-            z=self.model.editable_input_representation[::-1, :],
-            colorscale=[[0, 'white'], [1, 'black']],
-            zmin=0, zmax=1,
-            colorbar=dict(title='', len=0.5, x=1.02, xanchor='left', thickness=10)
+            z=(w[::-1, :]),
+            colorscale='Viridis',
+            zmin=(w[::-1, :]).min(),
+            zmax=(w[::-1, :]).max(),
+            colorbar=colorbar, showscale=utils.is_show_color_bar
         ))
         
         try:
-            xmin, xmax = ((region_settings[current_layer])[0]) - input_col_offset - 0.5, ((region_settings[current_layer])[1]) - input_col_offset + 0.5
-            ymin, ymax = ((grid_shape[0] - self.model.layer_activation_gradients[current_layer].shape[0]) + ((region_settings[current_layer])[2]) - input_row_offset - 0.5), ((grid_shape[0] - self.model.layer_activation_gradients[current_layer].shape[0]) + ((region_settings[current_layer])[3]) - input_row_offset + 0.5)
+            heatmap_fig.update_layout(
+                xaxis=dict(range=[xmin - 0.5, xmax + 0.5]),
+                yaxis=dict(range=[ymin - 0.5, ymax + 0.5])
+            )
+        except Exception as e:
+            pass
+        
+        heatmap_fig.update_layout(
+            margin=dict(l=10, r=10, t=10, b=40),
+            width=300, height=300,
+            xaxis=dict(dtick=1),
+            yaxis=dict(dtick=1),
+            shapes=highlight_shapes,
+            annotations=[dict(
+                text="Input Representation",
+                x=0.5, y=-0.15,
+                xref="paper", yref="paper",
+                showarrow=False,
+                font=dict(size=10)
+            )]
+        )
+        if np.abs(xmax-xmin)>15:
+            heatmap_fig.update_xaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(xmax-xmin))
+            )
+        if np.abs(ymax-ymin)>15:
+            heatmap_fig.update_yaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(ymax-ymin))
+            )
+        return heatmap_fig
+    
+    def _create_heatmap_full_target(self, current_node_index, current_layer, current_zoom, z, mask_ids, region_setting):
+        from vnittest import utils
+        
+        shapes = []
+        grid_shape = self.model.target_representation.shape
+        if current_node_index is not None:
+            ids = utils.calculate_conv_ids(mask_ids, current_node_index, grid_shape)
+            id_z, row, col = (ids[0]), (ids[1]), (ids[2])
+            original_row, original_col = ((mask_ids[0])[id_z, row, col]), ((mask_ids[1])[id_z, row, col])
+            ch_id = (int(current_zoom*10)%10)
+            if ch_id==(3*3):
+                ch_id = 4
+            offsets = (utils.INDEX2OFFSETS[ch_id])
+            new_row, new_col = (row+(offsets[-2])), (col+(offsets[-1]))
+            if (new_row>=0) and (new_row<((mask_ids[0]).shape[-2])) and (new_col>=0) and (new_col<((mask_ids[0]).shape[-1])):
+                new_original_row, new_original_col = ((mask_ids[0])[id_z, new_row, new_col]), ((mask_ids[1])[id_z, new_row, new_col])
+                
+                shapes.append(dict(
+                    type='circle', xref='x', yref='y',
+                    x0=new_original_col - 0.5, y0=grid_shape[-2]-1 - new_original_row - 0.5,
+                    x1=new_original_col + 0.5, y1=grid_shape[-2]-1 - new_original_row + 0.5,
+                    line=dict(color='red', width=3)
+                ))
+        w = 0.+self.model.target_representation[0,:,:]
+        colorbar=dict(title='', len=0.5, x=1.02, xanchor='left', thickness=10)
+        heatmap_fig = go.FigureWidget(data=go.Heatmap(
+            z=w[::-1, :],
+            colorscale='Viridis',
+            zmin=(w[::-1, :]).min(),
+            zmax=(w[::-1, :]).max(),
+            colorbar=colorbar, showscale=utils.is_show_color_bar
+        ))
+        
+        try:
+            xmin, xmax = (region_setting[0]) - 0.5, (region_setting[1]) + 0.5
+            ymin, ymax = ((grid_shape[-2] - (self.model.layer_activation_gradients[current_layer]).shape[-2]) + (region_setting[2]) - 0.5), ((grid_shape[-2] - (self.model.layer_activation_gradients[current_layer]).shape[-2]) + (region_setting[3]) + 0.5)
             heatmap_fig.update_layout(
                 xaxis=dict(range=[xmin, xmax]),
                 yaxis=dict(range=[ymin, ymax])
@@ -347,20 +683,139 @@ class Visualizer:
             yaxis=dict(dtick=1),
             shapes=shapes,
             annotations=[dict(
-                text="Input Representation",
-                x=0.5 + input_col_offset/100.0, y=-0.15 + input_row_offset/100.0,
+                text="Full-sized Target Representation",
+                x=0.5, y=-0.15,
                 xref="paper", yref="paper",
                 showarrow=False,
                 font=dict(size=10)
             )]
         )
+        if np.abs(xmax-xmin)>15:
+            heatmap_fig.update_xaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(xmax-xmin))
+            )
+        if np.abs(ymax-ymin)>15:
+            heatmap_fig.update_yaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(ymax-ymin))
+            )
         return heatmap_fig
 
-    def create_all_heatmaps(self, current_node_index, current_layer, connected_layer, threshold_value, offset_params, region_settings, 
-                            select_xmin_widget, select_xmax_widget, select_ymin_widget, select_ymax_widget, 
-                            output_xmin_widget, output_xmax_widget, output_ymin_widget, output_ymax_widget):
-        conv1_heatmap = self._create_heatmap_conv1(current_node_index, current_layer, region_settings, select_xmin_widget, select_xmax_widget, select_ymin_widget, select_ymax_widget,)
-        conv2_heatmap = self._create_heatmap_conv2(current_node_index, current_layer, connected_layer, threshold_value, region_settings, output_xmin_widget, output_xmax_widget, output_ymin_widget, output_ymax_widget)
-        target_heatmap = self._create_heatmap_target(current_node_index, current_layer, region_settings, offset_params)
-        input_heatmap = self._create_heatmap_input(current_node_index, current_layer, region_settings, offset_params)
-        return conv1_heatmap, conv2_heatmap, target_heatmap, input_heatmap
+    def _create_heatmap_full_input(self, current_node_index, current_layer, current_zoom, z, mask_ids, region_setting):
+        from vnittest import utils
+        
+        ch_id = 0
+        shapes = []
+        grid_shape = self.model.editable_input_representation.shape
+        if current_node_index is not None:
+            ids = utils.calculate_conv_ids(mask_ids, current_node_index, grid_shape)
+            id_z, row, col = (ids[0]), (ids[1]), (ids[2])
+            original_row, original_col = ((mask_ids[0])[id_z, row, col]), ((mask_ids[1])[id_z, row, col])
+            ch_id = (int(current_zoom*10)%10)
+            if ch_id==(3*3):
+                ch_id = 4
+            offsets = (utils.INDEX2OFFSETS[ch_id])
+            new_row, new_col = (row+(offsets[-2])), (col+(offsets[-1]))
+            if (new_row>=0) and (new_row<((mask_ids[0]).shape[-2])) and (new_col>=0) and (new_col<((mask_ids[0]).shape[-1])):
+                new_original_row, new_original_col = ((mask_ids[0])[id_z, new_row, new_col]), ((mask_ids[1])[id_z, new_row, new_col])
+                
+                shapes.append(dict(
+                    type='circle', xref='x', yref='y',
+                    x0=new_original_col - 0.5, y0=grid_shape[-2]-1 - new_original_row - 0.5,
+                    x1=new_original_col + 0.5, y1=grid_shape[-2]-1 - new_original_row + 0.5,
+                    line=dict(color='red', width=3)
+                ))
+        temp_shape = self.model.editable_input_representation.shape
+        w = 0.+self.model.editable_input_representation.reshape(temp_shape[0],1,temp_shape[-2],temp_shape[-1])[ch_id,0,:,:]
+        colorbar=dict(title='', len=0.5, x=1.02, xanchor='left', thickness=10)
+        heatmap_fig = go.FigureWidget(data=go.Heatmap(
+            z=np.abs(w[::-1, :]),
+            colorscale=[[0, 'white'], [1, 'black']],
+            zmin=0, zmax=1,
+            colorbar=colorbar, showscale=utils.is_show_color_bar
+        ))
+        
+        try:
+            xmin, xmax = (region_setting[0]) - 0.5, (region_setting[1]) + 0.5
+            ymin, ymax = ((grid_shape[-2] - self.model.layer_activation_gradients[current_layer].shape[-2]) + (region_setting[2]) - 0.5), ((grid_shape[-2] - self.model.layer_activation_gradients[current_layer].shape[-2]) + (region_setting[3]) + 0.5)
+            heatmap_fig.update_layout(
+                xaxis=dict(range=[xmin, xmax]),
+                yaxis=dict(range=[ymin, ymax])
+            )
+        except Exception as e:
+            pass
+        
+        heatmap_fig.update_layout(
+            margin=dict(l=10, r=10, t=10, b=40),
+            width=300, height=300,
+            xaxis=dict(dtick=1),
+            yaxis=dict(dtick=1),
+            shapes=shapes,
+            annotations=[dict(
+                text="Full-sized Input Representation",
+                x=0.5, y=-0.15,
+                xref="paper", yref="paper",
+                showarrow=False,
+                font=dict(size=10)
+            )]
+        )
+        if np.abs(xmax-xmin)>15:
+            heatmap_fig.update_xaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(xmax-xmin))
+            )
+        if np.abs(ymax-ymin)>15:
+            heatmap_fig.update_yaxes(
+                tickmode='array',
+                nticks=10
+            )
+        else:
+            heatmap_fig.update_xaxes(
+                dtick=1,
+                nticks=int(np.abs(ymax-ymin))
+            )
+        return heatmap_fig
+
+    def create_all_heatmaps(self, current_node_index, current_zoom, selected_layer, connected_layer, threshold_value, conv_zs, conv_target, conv_input, conv_mask_ids, conv_region_settings, region_settings, offset_params, select_xmin_widget, select_xmax_widget, select_ymin_widget, select_ymax_widget, output_xmin_widget, output_xmax_widget, output_ymin_widget, output_ymax_widget, is_conv1_choosed=True):
+        conv1_heatmap, conv2_heatmap = None, None
+        if is_conv1_choosed:
+            row_offset, col_offset = offset_params[selected_layer]
+            conv1_heatmap = self._create_heatmap_focused_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[selected_layer].shape[-1])+col_offset, selected_layer, current_zoom, conv_zs[selected_layer], conv_mask_ids[selected_layer], conv_region_settings[selected_layer], select_xmin_widget, select_xmax_widget, select_ymin_widget, select_ymax_widget, is_conv1_choosed=is_conv1_choosed)
+            
+            row_offset, col_offset = offset_params[connected_layer]
+            conv2_heatmap = self._create_heatmap_relative_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[connected_layer].shape[-1])+col_offset, selected_layer, connected_layer, threshold_value, current_zoom, conv_zs[connected_layer], conv_mask_ids[connected_layer], conv_region_settings[connected_layer], output_xmin_widget, output_xmax_widget, output_ymin_widget, output_ymax_widget, is_conv1_choosed=is_conv1_choosed)
+        else:
+            row_offset, col_offset = offset_params[selected_layer]
+            conv1_heatmap = self._create_heatmap_relative_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[selected_layer].shape[-1])+col_offset, connected_layer, selected_layer, threshold_value, current_zoom, conv_zs[selected_layer], conv_mask_ids[selected_layer], conv_region_settings[selected_layer], select_xmin_widget, select_xmax_widget, select_ymin_widget, select_ymax_widget, is_conv1_choosed=is_conv1_choosed)
+            
+            row_offset, col_offset = offset_params[connected_layer]
+            conv2_heatmap = self._create_heatmap_focused_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[connected_layer].shape[-1])+col_offset, connected_layer, current_zoom, conv_zs[connected_layer], conv_mask_ids[connected_layer], conv_region_settings[connected_layer], output_xmin_widget, output_xmax_widget, output_ymin_widget, output_ymax_widget, is_conv1_choosed=is_conv1_choosed)
+            
+        row_offset, col_offset = offset_params[connected_layer]
+        target_heatmap = self._create_heatmap_target(current_node_index+row_offset*(self.model.target_representation.shape[-1])+col_offset, connected_layer, current_zoom, conv_target, conv_mask_ids[connected_layer], conv_region_settings[connected_layer])
+        
+        row_offset, col_offset = offset_params[selected_layer]
+        input_heatmap = self._create_heatmap_input(current_node_index+row_offset*(self.model.input_representation.shape[-1])+col_offset, selected_layer, current_zoom, conv_input, conv_mask_ids[selected_layer], conv_region_settings[selected_layer])
+        
+        row_offset, col_offset = offset_params[connected_layer]
+        full_target_heatmap = self._create_heatmap_full_target(current_node_index+row_offset*(self.model.target_representation.shape[-1])+col_offset, selected_layer, current_zoom, conv_target, conv_mask_ids[connected_layer], region_settings[connected_layer])
+        
+        row_offset, col_offset = offset_params[selected_layer]
+        full_input_heatmap = self._create_heatmap_full_input(current_node_index+row_offset*(self.model.editable_input_representation.shape[-1])+col_offset, selected_layer, current_zoom, conv_input, conv_mask_ids[selected_layer], region_settings[selected_layer])
+        return conv1_heatmap, conv2_heatmap, target_heatmap, input_heatmap, full_target_heatmap, full_input_heatmap

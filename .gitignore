@@ -2,3 +2,7 @@
 /build
 /vnittest/notebooks/.ipynb_checkpoints
 /vnittest/__pycache__
+
+/.quarto/
+/docs/site_libs
+/examples/breakpoints & data hooking/.ipynb_checkpoints

@@ -1,0 +1,17 @@
+project:
+  type: website
+  output-dir: docs # Chỉ định thư mục đầu ra là 'docs' để sẵn sàng cho GitHub Pages
+
+website:
+  title: "vnittest Interactive Demo"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    page-layout: full
+    embed-resources: true # Tùy chọn quan trọng để nhúng tất cả tài nguyên

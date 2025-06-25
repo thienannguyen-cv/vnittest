@@ -1,0 +1,25 @@
+---
+title: "vnittest Interactive Demo"
+format: html
+execute:
+  echo: false  # Ẩn toàn bộ code, chỉ hiển thị kết quả (giống Voilà)
+---
+
+## Giới thiệu
+
+Đây là bản demo tương tác được render trực tiếp bằng Quarto.
+
+---
+
+## Giao diện tương tác
+
+```{python}
+#| label: full-app
+# DÁN TOÀN BỘ CODE TỪ NOTEBOOK CỦA BẠN VÀO ĐÂY
+
+# --- BẮT ĐẦU VÍ DỤ ---
+# Ví dụ, bạn sao chép tất cả các ô mã từ vnittest.ipynb vào đây
+
+print("1")
+```
+

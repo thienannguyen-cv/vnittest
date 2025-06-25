@@ -1,0 +1,11 @@
+name: data_science
+channels:
+  - conda-forge
+dependencies:
+  - python=3.6.7
+  - voila=0.3.0
+  - ipywidgets=7.6.5  # Yêu cầu ipywidgets phiên bản 7
+  - ipyevents=2.0.1
+  - numpy=1.19.5
+  - matplotlib=3.3.4
+  - plotly=5.12.0
