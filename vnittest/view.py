@@ -175,7 +175,7 @@ class Visualizer:
         w = (w[0,id_z,:,:])
         return w
         
-    def _create_heatmap_focused_conv(self, current_node_index, focused_layer, current_zoom, z, mask_ids, region_setting, xmin_widget, xmax_widget, ymin_widget, ymax_widget, is_conv1_choosed=True):
+    def _create_heatmap_focused_conv(self, current_node_index, focused_layer, current_zoom, z, mask_ids, region_setting, xmin_widget, xmax_widget, ymin_widget, ymax_widget):
         from vnittest import utils
         
         ch_id = 0
@@ -292,7 +292,7 @@ class Visualizer:
             )
         return heatmap_fig
 
-    def _create_heatmap_relative_conv(self, current_node_index, focused_layer, relative_layer, threshold_value, current_zoom, z, mask_ids, region_setting, xmin_widget, xmax_widget, ymin_widget, ymax_widget, is_conv1_choosed=True):
+    def _create_heatmap_relative_conv(self, current_node_index, focused_layer, relative_layer, threshold_value, current_zoom, z, mask_ids, region_setting, xmin_widget, xmax_widget, ymin_widget, ymax_widget):
         from vnittest import utils
         
         ch_id = 0
@@ -301,17 +301,11 @@ class Visualizer:
         xmin, xmax, ymin, ymax = (region_setting[0]), (region_setting[1]), (region_setting[2]), (region_setting[3])
         ids, w = None, None
         current_layer, connected_layer = focused_layer, relative_layer
-        if not is_conv1_choosed:
-            current_layer, connected_layer = relative_layer, focused_layer
         if (self.model.flow_matrices[(current_layer, connected_layer)]) is not None:
             if not isinstance(self.model.flow_matrices[(current_layer, connected_layer)], dict):
                 flow_matrix_thresholded = None
-                if is_conv1_choosed:
-                    grid_shape = self.model.layer_activation_gradients[connected_layer].shape
-                    flow_matrix_thresholded = (((self.model.flow_matrices[(current_layer, connected_layer)]) > threshold_value)[current_node_index, :]).reshape(*grid_shape)
-                else:
-                    grid_shape = self.model.layer_activation_gradients[current_layer].shape
-                    flow_matrix_thresholded = (((self.model.flow_matrices[(current_layer, connected_layer)]) > threshold_value)[:, current_node_index]).reshape(*grid_shape)
+                grid_shape = self.model.layer_activation_gradients[connected_layer].shape
+                flow_matrix_thresholded = (((self.model.flow_matrices[(current_layer, connected_layer)]) > threshold_value)[current_node_index, :]).reshape(*grid_shape)
                 for r in range(grid_shape[0]):
                     for c in range(grid_shape[1]):
                         if (flow_matrix_thresholded[r, c]) > 0:
@@ -339,6 +333,7 @@ class Visualizer:
                     
                     for j in ch_ids:
                         offsets = (utils.INDEX2OFFSETS[j])
+                        layer_factor = (1 if )
                         new_row, new_col = (row+(offsets[-2])), (col+(offsets[-1]))
                         w[new_row, new_col] = z[j,id_z,new_row, new_col]
                         if utils.DEBUG_FLAG and (ch_id!=(3*3)):
@@ -351,12 +346,8 @@ class Visualizer:
                             color = ("blue" if j!=(ch_ids[-1]) else "red")
                             new_original_row, new_original_col = ((mask_ids[0])[id_z, new_row, new_col]), ((mask_ids[1])[id_z, new_row, new_col])
                             flow_value = 0
-                            if is_conv1_choosed:
-                                if ((original_row, original_col), (new_original_row, new_original_col)) in flow_matrix:
-                                    flow_value = (flow_matrix[((original_row, original_col), (new_original_row, new_original_col))])
-                            else:
-                                if ((new_original_row, new_original_col), (original_row, original_col)) in flow_matrix:
-                                    flow_value = (flow_matrix[((new_original_row, new_original_col), (original_row, original_col))])
+                            if ((original_row, original_col), (new_original_row, new_original_col)) in flow_matrix:
+                                flow_value = (flow_matrix[((original_row, original_col), (new_original_row, new_original_col))])
                             if flow_value >= threshold_value:
                                 highlight_shapes.append(dict(
                                     type='circle', xref='x', yref='y',
@@ -796,16 +787,18 @@ class Visualizer:
         conv1_heatmap, conv2_heatmap = None, None
         if is_conv1_choosed:
             row_offset, col_offset = offset_params[selected_layer]
-            conv1_heatmap = self._create_heatmap_focused_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[selected_layer].shape[-1])+col_offset, selected_layer, current_zoom, conv_zs[selected_layer], conv_mask_ids[selected_layer], conv_region_settings[selected_layer], select_xmin_widget, select_xmax_widget, select_ymin_widget, select_ymax_widget, is_conv1_choosed=is_conv1_choosed)
+            conv1_heatmap = self._create_heatmap_focused_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[selected_layer].shape[-1])+col_offset, selected_layer, current_zoom, conv_zs[selected_layer], conv_mask_ids[selected_layer], conv_region_settings[selected_layer], select_xmin_widget, select_xmax_widget, select_ymin_widget, select_ymax_widget, is_conv1_choosed=True)
             
             row_offset, col_offset = offset_params[connected_layer]
-            conv2_heatmap = self._create_heatmap_relative_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[connected_layer].shape[-1])+col_offset, selected_layer, connected_layer, threshold_value, current_zoom, conv_zs[connected_layer], conv_mask_ids[connected_layer], conv_region_settings[connected_layer], output_xmin_widget, output_xmax_widget, output_ymin_widget, output_ymax_widget, is_conv1_choosed=is_conv1_choosed)
+            conv2_heatmap = self._create_heatmap_relative_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[connected_layer].shape[-1])+col_offset, selected_layer, connected_layer, threshold_value, current_zoom, conv_zs[connected_layer], conv_mask_ids[connected_layer], conv_region_settings[connected_layer], output_xmin_widget, output_xmax_widget, output_ymin_widget, output_ymax_widget, is_conv1_choosed=True)
         else:
             row_offset, col_offset = offset_params[selected_layer]
-            conv1_heatmap = self._create_heatmap_relative_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[selected_layer].shape[-1])+col_offset, connected_layer, selected_layer, threshold_value, current_zoom, conv_zs[selected_layer], conv_mask_ids[selected_layer], conv_region_settings[selected_layer], select_xmin_widget, select_xmax_widget, select_ymin_widget, select_ymax_widget, is_conv1_choosed=is_conv1_choosed)
+            conv2_heatmap = self._create_heatmap_focused_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[selected_layer].shape[-1])+col_offset, selected_layer, current_zoom, conv_zs[selected_layer], conv_mask_ids[selected_layer], conv_region_settings[selected_layer], output_xmin_widget, output_xmax_widget, output_ymin_widget, output_ymax_widget, is_conv1_choosed=False)
             
             row_offset, col_offset = offset_params[connected_layer]
-            conv2_heatmap = self._create_heatmap_focused_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[connected_layer].shape[-1])+col_offset, connected_layer, current_zoom, conv_zs[connected_layer], conv_mask_ids[connected_layer], conv_region_settings[connected_layer], output_xmin_widget, output_xmax_widget, output_ymin_widget, output_ymax_widget, is_conv1_choosed=is_conv1_choosed)
+            conv1_heatmap = self._create_heatmap_relative_conv(current_node_index+row_offset*(self.model.layer_activation_gradients[connected_layer].shape[-1])+col_offset, connected_layer, connected_layer, threshold_value, current_zoom, conv_zs[connected_layer], conv_mask_ids[connected_layer], conv_region_settings[connected_layer], select_xmin_widget, select_xmax_widget, select_ymin_widget, select_ymax_widget, is_conv1_choosed=False)
+            
+            
             
         row_offset, col_offset = offset_params[connected_layer]
         target_heatmap = self._create_heatmap_target(current_node_index+row_offset*(self.model.target_representation.shape[-1])+col_offset, connected_layer, current_zoom, conv_target, conv_mask_ids[connected_layer], conv_region_settings[connected_layer])
